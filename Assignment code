@@ -1,0 +1,752 @@
+import csv
+
+
+# ============================================================
+# FILE HANDLER
+# ============================================================
+
+FILES = {
+    "customers": "customers.csv",
+    "restaurants": "restaurants.csv",
+    "foods": "food_items.csv",
+    "orders": "orders.csv",
+}
+
+
+def _write(path, header, rows):
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(header)
+        writer.writerows(rows)
+
+
+def _read(path):
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def save_all(customers, restaurants, foods, orders):
+    _write(
+        FILES["customers"],
+        ["ID", "Name", "Location", "City"],
+        [
+            [
+                cid,
+                x["name"],
+                x["address"][0],
+                x["address"][1]
+            ]
+            for cid, x in customers.items()
+        ]
+    )
+
+    _write(
+        FILES["restaurants"],
+        ["ID", "Name", "Location"],
+        [
+            [rid, x["name"], x["location"]]
+            for rid, x in restaurants.items()
+        ]
+    )
+
+    _write(
+        FILES["foods"],
+        ["Code", "Name", "Category", "Price", "Restaurant"],
+        [
+            [
+                code,
+                x["name"],
+                x["category"],
+                x["price"],
+                x["restaurant"]
+            ]
+            for code, x in foods.items()
+        ]
+    )
+
+    _write(
+        FILES["orders"],
+        [
+            "Customer",
+            "Restaurant",
+            "Food",
+            "Quantity",
+            "Status",
+            "Subtotal",
+            "Discount",
+            "Delivery",
+            "Total"
+        ],
+        [
+            [
+                x["customer"],
+                x["restaurant"],
+                x["food"],
+                x["quantity"],
+                x["status"],
+                x["subtotal"],
+                x["discount"],
+                x["delivery"],
+                x["total"]
+            ]
+            for x in orders
+        ]
+    )
+
+    print("All records saved successfully.")
+
+
+def load_all():
+    customers = {}
+    restaurants = {}
+    foods = {}
+    orders = []
+    cuisines = set()
+
+    try:
+        for row in _read(FILES["customers"]):
+            customers[row["ID"]] = {
+                "name": row["Name"],
+                "address": (
+                    row["Location"],
+                    row["City"]
+                )
+            }
+    except FileNotFoundError:
+        pass
+
+    try:
+        for row in _read(FILES["restaurants"]):
+            restaurants[row["ID"]] = {
+                "name": row["Name"],
+                "location": row["Location"]
+            }
+    except FileNotFoundError:
+        pass
+
+    try:
+        for row in _read(FILES["foods"]):
+            foods[row["Code"]] = {
+                "name": row["Name"],
+                "category": row["Category"],
+                "price": float(row["Price"]),
+                "restaurant": row["Restaurant"]
+            }
+
+            cuisines.add(row["Category"])
+
+    except FileNotFoundError:
+        pass
+
+    try:
+        for row in _read(FILES["orders"]):
+            orders.append({
+                "customer": row["Customer"],
+                "restaurant": row["Restaurant"],
+                "food": row["Food"],
+                "quantity": int(row["Quantity"]),
+                "status": row["Status"],
+                "subtotal": float(row["Subtotal"]),
+                "discount": float(row["Discount"]),
+                "delivery": float(row["Delivery"]),
+                "total": float(row["Total"])
+            })
+
+    except FileNotFoundError:
+        pass
+
+    return customers, restaurants, foods, orders, cuisines
+
+
+# ============================================================
+# CUSTOMER MANAGEMENT
+# ============================================================
+
+def add_customer(customers):
+    customer_id = input("Enter customer ID: ").strip()
+
+    if not customer_id:
+        print("Customer ID cannot be empty.")
+        return
+
+    if customer_id in customers:
+        print("Customer already exists.")
+        return
+
+    name = input("Enter customer name: ").strip().title()
+    location = input("Enter location: ").strip().title()
+    city = input("Enter city: ").strip().title()
+
+    customers[customer_id] = {
+        "name": name,
+        "address": (location, city)
+    }
+
+    print("Customer added successfully.")
+
+
+def find_customer(customers):
+    key = input("Enter customer name to search: ").strip().casefold()
+    matches = []
+
+    for cid, info in customers.items():
+        if key in info["name"].casefold():
+            matches.append((cid, info))
+
+    if not matches:
+        print("No matching customer found.")
+        return
+
+    for cid, info in matches:
+        location, city = info["address"]
+
+        print(
+            f"ID: {cid} | Name: {info['name']} | "
+            f"Location: {location}, {city}"
+        )
+
+
+# ============================================================
+# RESTAURANT MANAGEMENT
+# ============================================================
+
+def add_restaurant(restaurants):
+    rid = input("Enter restaurant ID: ").strip().upper()
+
+    if rid in restaurants:
+        print("Restaurant already exists.")
+        return
+
+    name = input("Enter restaurant name: ").strip().title()
+    location = input("Enter restaurant location: ").strip().title()
+
+    if not name or not location:
+        print("Restaurant name and location are required.")
+        return
+
+    restaurants[rid] = {
+        "name": name,
+        "location": location
+    }
+
+    print("Restaurant added successfully.")
+
+
+def find_restaurant(restaurants):
+    term = input(
+        "Enter restaurant name to search: "
+    ).strip().casefold()
+
+    result = [
+        (rid, info)
+        for rid, info in restaurants.items()
+        if term in info["name"].casefold()
+    ]
+
+    if not result:
+        print("No matching restaurant found.")
+        return
+
+    for rid, info in result:
+        print(
+            f"ID: {rid} | {info['name']} | {info['location']}"
+        )
+
+
+def list_restaurants(restaurants):
+    if not restaurants:
+        print("No restaurants available.")
+        return
+
+    print("\n--- RESTAURANT LIST ---")
+
+    for rid, info in restaurants.items():
+        print(
+            f"{rid}: {info['name']} ({info['location']})"
+        )
+
+
+# ============================================================
+# FOOD MANAGEMENT
+# ============================================================
+
+def add_food(foods, cuisines, restaurants):
+    code = input("Enter food code: ").strip().upper()
+
+    if code in foods:
+        print("Food item already exists.")
+        return
+
+    rid = input("Enter restaurant ID: ").strip().upper()
+
+    if rid not in restaurants:
+        print("Restaurant does not exist.")
+        return
+
+    name = input("Enter food name: ").strip().title()
+    category = input(
+        "Enter cuisine category: "
+    ).strip().title()
+
+    if not name or not category:
+        print("Food name and category are required.")
+        return
+
+    try:
+        price = float(input("Enter price: "))
+    except ValueError:
+        print("Price must be numeric.")
+        return
+
+    if price <= 0:
+        print("Price must be positive.")
+        return
+
+    foods[code] = {
+        "name": name,
+        "category": category,
+        "price": price,
+        "restaurant": rid
+    }
+
+    cuisines.add(category)
+
+    print("Food item added successfully.")
+
+
+def list_food(foods, restaurants):
+    if not foods:
+        print("No food items available.")
+        return
+
+    print("\n--- FOOD MENU ---")
+
+    for code, item in foods.items():
+        rid = item["restaurant"]
+
+        restaurant = restaurants.get(
+            rid, {"name": "Unknown"}
+        )["name"]
+
+        print(
+            f"{code}: {item['name']} | "
+            f"{item['category']} | "
+            f"{restaurant} | "
+            f"Rs. {item['price']:.2f}"
+        )
+
+
+# ============================================================
+# ORDER MANAGEMENT
+# ============================================================
+
+class OrderError(Exception):
+    pass
+
+
+def _bill(price, qty):
+    subtotal = price * qty
+
+    rate = (
+        0.10
+        if subtotal >= 1000
+        else 0.05
+        if subtotal >= 500
+        else 0
+    )
+
+    discount = subtotal * rate
+    delivery = 40.0
+
+    return (
+        subtotal,
+        discount,
+        delivery,
+        subtotal - discount + delivery
+    )
+
+
+def place_order(customers, restaurants, foods, orders):
+    cid = input("Enter customer ID: ").strip()
+
+    if cid not in customers:
+        raise OrderError("Customer ID does not exist")
+
+    code = input("Enter food code: ").strip().upper()
+
+    if code not in foods:
+        raise OrderError("Food code does not exist")
+
+    food = foods[code]
+    rid = food["restaurant"]
+
+    if rid not in restaurants:
+        raise OrderError("Restaurant record is missing")
+
+    try:
+        qty = int(input("Enter quantity: "))
+
+        if qty < 1:
+            raise ValueError
+
+    except ValueError:
+        raise OrderError(
+            "Quantity must be a positive integer"
+        )
+
+    subtotal, discount, delivery, total = _bill(
+        food["price"], qty
+    )
+
+    orders.append({
+        "customer": cid,
+        "restaurant": rid,
+        "food": code,
+        "quantity": qty,
+        "status": "Pending",
+        "subtotal": subtotal,
+        "discount": discount,
+        "delivery": delivery,
+        "total": total
+    })
+
+    print("Order created successfully.")
+    print(
+        f"Restaurant: {restaurants[rid]['name']}"
+    )
+    print(f"Food: {food['name']}")
+    print(f"Final amount: Rs. {total:.2f}")
+
+
+def list_orders(customers, restaurants, foods, orders):
+    if not orders:
+        print("No orders available.")
+        return
+
+    print("\n--- ORDER HISTORY ---")
+
+    for number, order in enumerate(orders, start=1):
+
+        cname = customers.get(
+            order["customer"], {}
+        ).get("name", "Unknown")
+
+        rname = restaurants.get(
+            order["restaurant"], {}
+        ).get("name", "Unknown")
+
+        fname = foods.get(
+            order["food"], {}
+        ).get("name", "Unknown")
+
+        print(
+            f"{number}. {cname} | {rname} | {fname} | "
+            f"Qty:{order['quantity']} | "
+            f"{order['status']} | "
+            f"Rs.{order['total']:.2f}"
+        )
+
+
+def update_status(orders):
+    if not orders:
+        print("There are no orders.")
+        return
+
+    for i, item in enumerate(orders, start=1):
+        print(i, item["food"], item["status"])
+
+    try:
+        index = int(
+            input("Enter order number: ")
+        ) - 1
+
+        if index not in range(len(orders)):
+            raise ValueError
+
+    except ValueError:
+        print("Invalid order number.")
+        return
+
+    allowed = (
+        "Pending",
+        "Confirmed",
+        "Preparing",
+        "Delivered",
+        "Cancelled"
+    )
+
+    status = input(
+        "Enter new status: "
+    ).strip().title()
+
+    if status not in allowed:
+        print("Invalid status.")
+        return
+
+    orders[index]["status"] = status
+
+    print("Order status updated.")
+
+
+# ============================================================
+# ANALYSIS
+# ============================================================
+
+def _total_for(customer_id, orders):
+    return sum(
+        item["total"]
+        for item in orders
+        if item["customer"] == customer_id
+    )
+
+
+def customer_spending(customers, orders):
+    cid = input("Enter customer ID: ").strip()
+
+    if cid not in customers:
+        print("Customer not found.")
+        return
+
+    amount = _total_for(cid, orders)
+
+    print(
+        f"{customers[cid]['name']} has ordered goods "
+        f"worth Rs. {amount:.2f}"
+    )
+
+
+def compare_order_totals(orders):
+    if len(orders) < 2:
+        print("At least two orders are required.")
+        return
+
+    try:
+        first = int(
+            input("Enter first order number: ")
+        ) - 1
+
+        second = int(
+            input("Enter second order number: ")
+        ) - 1
+
+        if (
+            first not in range(len(orders))
+            or second not in range(len(orders))
+        ):
+            raise ValueError
+
+    except ValueError:
+        print("Invalid order number.")
+        return
+
+    a = orders[first]["total"]
+    b = orders[second]["total"]
+
+    if a == b:
+        print("Both orders have equal value.")
+    elif a > b:
+        print("First order has the higher value.")
+    else:
+        print("Second order has the higher value.")
+
+
+# ============================================================
+# REPORT GENERATION
+# ============================================================
+
+def build_report(
+    customers,
+    restaurants,
+    foods,
+    orders,
+    cuisines
+):
+    print("\n========== FOOD ORDER REPORT ==========")
+
+    print("Customers:", len(customers))
+    print("Restaurants:", len(restaurants))
+    print("Food items:", len(foods))
+    print("Orders:", len(orders))
+
+    sales = sum(
+        item["total"]
+        for item in orders
+    )
+
+    status_count = {}
+    restaurant_sales = {}
+
+    for item in orders:
+        status = item["status"]
+
+        status_count[status] = status_count.get(
+            status, 0
+        ) + 1
+
+        rid = item["restaurant"]
+
+        restaurant_sales[rid] = (
+            restaurant_sales.get(rid, 0)
+            + item["total"]
+        )
+
+    print(f"Total sales: Rs. {sales:.2f}")
+
+    print("\nORDER STATUS")
+
+    for status, count in sorted(
+        status_count.items()
+    ):
+        print(status, ":", count)
+
+    print("\nRESTAURANT PERFORMANCE")
+
+    for rid, amount in restaurant_sales.items():
+
+        name = restaurants.get(
+            rid, {}
+        ).get("name", "Unknown")
+
+        print(
+            f"{name}: Rs. {amount:.2f}"
+        )
+
+    print("\nCUISINE CATEGORIES")
+
+    for category in sorted(cuisines):
+        print("-", category)
+
+
+# ============================================================
+# MAIN MENU
+# ============================================================
+
+customers, restaurants, foods, orders, cuisines = load_all()
+
+
+MENU = {
+    "1": lambda: add_customer(customers),
+    "2": lambda: find_customer(customers),
+
+    "3": lambda: add_restaurant(restaurants),
+    "4": lambda: find_restaurant(restaurants),
+    "5": lambda: list_restaurants(restaurants),
+
+    "6": lambda: add_food(
+        foods,
+        cuisines,
+        restaurants
+    ),
+
+    "7": lambda: list_food(
+        foods,
+        restaurants
+    ),
+
+    "8": lambda: place_order(
+        customers,
+        restaurants,
+        foods,
+        orders
+    ),
+
+    "9": lambda: update_status(orders),
+
+    "10": lambda: list_orders(
+        customers,
+        restaurants,
+        foods,
+        orders
+    ),
+
+    "11": lambda: customer_spending(
+        customers,
+        orders
+    ),
+
+    "12": lambda: compare_order_totals(
+        orders
+    ),
+
+    "13": lambda: build_report(
+        customers,
+        restaurants,
+        foods,
+        orders,
+        cuisines
+    ),
+
+    "14": lambda: save_all(
+        customers,
+        restaurants,
+        foods,
+        orders
+    ),
+}
+
+
+def show_menu():
+    print(
+        "\n========== FOOD ORDER AND ANALYSIS "
+        "MANAGEMENT SYSTEM =========="
+    )
+
+    print("1. Add customer")
+    print("2. Search customer")
+    print("3. Add restaurant")
+    print("4. Search restaurant")
+    print("5. View restaurants")
+    print("6. Add food item")
+    print("7. View food menu")
+    print("8. Place order")
+    print("9. Update order status")
+    print("10. View orders")
+    print("11. Customer spending")
+    print("12. Compare orders")
+    print("13. Generate report")
+    print("14. Save data")
+    print("15. Exit")
+
+
+# ============================================================
+# PROGRAM EXECUTION
+# ============================================================
+
+while True:
+
+    show_menu()
+
+    choice = input(
+        "Enter your choice: "
+    ).strip()
+
+    try:
+
+        if choice == "15":
+
+            save_all(
+                customers,
+                restaurants,
+                foods,
+                orders
+            )
+
+            print("Program closed successfully.")
+            break
+
+        action = MENU.get(choice)
+
+        if action is None:
+            print("Please select a valid option.")
+            continue
+
+        action()
+
+    except OrderError as exc:
+        print("Order error:", exc)
+
+    except (ValueError, KeyError) as exc:
+        print("Input error:", exc)
+
+    except Exception as exc:
+        print("Unexpected problem:", exc)
