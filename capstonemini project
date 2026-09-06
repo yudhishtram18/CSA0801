@@ -1,0 +1,193 @@
+import sys
+import types
+import json
+import os
+
+banking = types.ModuleType('banking')
+sys.modules['banking'] = banking
+
+file_handler = types.ModuleType('banking.file_handler')
+sys.modules['banking.file_handler'] = file_handler
+banking.file_handler = file_handler
+
+auth = types.ModuleType('banking.auth')
+sys.modules['banking.auth'] = auth
+banking.auth = auth
+
+operations = types.ModuleType('banking.operations')
+sys.modules['banking.operations'] = operations
+banking.operations = operations
+
+def _setup_file_handler():
+    DATA_FILE = "accounts.json"
+    
+    def load_accounts():
+        if not os.path.exists(DATA_FILE):
+            return {}
+        try:
+            with open(DATA_FILE, "r") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return {}
+            
+    def save_accounts(accounts):
+        with open(DATA_FILE, "w") as f:
+            json.dump(accounts, f, indent=4)
+            
+    file_handler.load_accounts = load_accounts
+    file_handler.save_accounts = save_accounts
+
+_setup_file_handler()
+
+def _setup_auth():
+    from banking.file_handler import load_accounts, save_accounts
+    
+    def create_account(account_number, name, pin, initial_deposit):
+        accounts = load_accounts()
+        
+        if account_number in accounts:
+            return False, "Account number already exists."
+            
+        if initial_deposit < 0:
+            return False, "Initial deposit cannot be negative."
+            
+        accounts[account_number] = {
+            "name": name,
+            "pin": pin,
+            "balance": float(initial_deposit)
+        }
+        
+        save_accounts(accounts)
+        return True, "Account created successfully."
+        
+    def login(account_number, pin):
+        accounts = load_accounts()
+        
+        if account_number not in accounts:
+            return False, "Account not found."
+if accounts[account_number]["pin"] == pin:
+            print("Login SUCCESSFUL")
+            
+            return True, accounts[account_number]["name"]
+        
+    auth.create_account = create_account
+    auth.login = login
+
+#_setup_auth()
+
+def _setup_operations():
+    from banking.file_handler import load_accounts, save_accounts
+    
+    def check_balance(account_number):
+        accounts = load_accounts()
+        return float(accounts[account_number]["balance"])
+        
+    def deposit(account_number, amount):
+        if amount <= 0:
+            return False, "Amount must be greater than zero."
+            
+        accounts = load_accounts()
+        accounts[account_number]["balance"] += amount
+        save_accounts(accounts)
+        return True, f"Successfully deposited {amount:.2f}."
+        
+    def withdraw(account_number, amount):
+        if amount <= 0:
+            return False, "Amount must be greater than zero."
+            
+        accounts = load_accounts()
+        if accounts[account_number]["balance"] < amount:
+            return False, "Insufficient balance."
+            
+        accounts[account_number]["balance"] -= amount
+        save_accounts(accounts)
+        return True, f"Successfully withdrew {amount:.2f}."
+        
+    operations.check_balance = check_balance
+    operations.deposit = deposit
+    operations.withdraw = withdraw
+    
+#_setup_operations()
+
+from banking.auth import create_account, login
+from banking.operations import check_balance, deposit, withdraw
+
+while True:
+    print("\n*** MINI BANKING SYSTEM ***")
+    print("1. Create New Account")
+    print("2. Login to Account")
+    print("3. Exit")
+    choice = input("Enter choice: ").strip()
+    
+    if choice == "1":
+        account_number = input("Enter a unique account number: ").strip()
+        name = input("Enter your name: ").strip()
+        pin = input("Create a 4-digit PIN: ").strip()
+        try:
+            initial_deposit = float(input("Enter initial deposit: "))
+            success, msg = create_account(account_number, name, pin, initial_deposit)
+            print(msg)
+        except ValueError:
+            print("Invalid amount entered.")
+            
+    elif choice == "2":
+        # ...
+pin = input("Create a 4-digit PIN: ").strip()
+        try:
+            initial_deposit = float(input("Enter initial deposit amount: "))
+            success, msg = create_account(acc_num, name, pin, initial_deposit)
+            print(msg)
+        except ValueError:
+            print("Invalid amount entered.")
+
+    elif choice == "2":
+        acc_num = input("Enter account number: ").strip()
+        pin = input("Enter PIN: ").strip()
+        success, msg = login(acc_num, pin)
+
+        if success:
+            print(f"\nWelcome back, {msg}!")
+            account_menu(acc_num)
+        else:
+            print(f"Login failed: {msg}")
+            
+    elif choice == "3":
+        print("Thank you for using the Mini Banking System. Goodbye!")
+        break
+    else:
+        print("Invalid option. Please try again.")
+
+def account_menu(acc_num):
+    while True:
+        print("\n--- Account Menu ---")
+        print("1. Check Balance")
+        print("2. Deposit Money")
+        print("3. Withdraw Money")
+        print("4. Logout")
+        choice = input("Enter choice: ").strip()
+
+        if choice == "1":
+            balance = check_balance(acc_num)
+            print(f"Current Balance: ${balance:.2f}")
+        elif choice == "2":
+            try:
+                amount = float(input("Enter deposit amount: "))
+                success, msg = deposit(acc_num, amount)
+                print(msg)
+            except ValueError:
+                print("Invalid amount.")
+        elif choice == "3":
+            try:
+                amount = float(input("Enter withdrawal amount: "))
+                success, msg = withdraw(acc_num, amount)
+                print(msg)
+            except ValueError:
+                print("Invalid amount.")
+        elif choice == "4":
+            print("Logged out successfully.")
+            break
+        else:
+            print("Invalid choice.")
+
+if __name__ == "__main__":
+    main()
